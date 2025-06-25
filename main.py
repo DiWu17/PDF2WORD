@@ -14,8 +14,8 @@ def main():
     主函数，根据用户选择的模式将PDF转换为Word文档。
     """
     parser = argparse.ArgumentParser(description="PDF to Word Converter")
-    parser.add_argument("-i", "--input", required=True, help="输入PDF文件的路径")
-    parser.add_argument("-o", "--output", required=True, help="输出文件的目录")
+    parser.add_argument("-i", "--input", help="输入PDF文件的路径", default="input/sample_2.pdf")
+    parser.add_argument("-o", "--output", help="输出文件的目录", default="output")
     parser.add_argument(
         "-m", "--mode", 
         choices=["content", "format"], 

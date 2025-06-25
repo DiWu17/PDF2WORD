@@ -127,12 +127,65 @@ class RapidTableModel(object):
 
         base64_image = encode_image(image)
 
-        prompt = "请将这张图片中的表格转换为HTML格式。请只返回纯HTML代码，不要包含任何markdown标记（例如```html...```）或者其他多余的解释。"
+        prompt = """
+        ## 角色
+        你是一位精通网页设计的科研内容专家，擅长将学术图像中的表格内容准确提取、翻译，并生成语义清晰、结构合理、视觉美观的 HTML 页面代码。
+
+        ## 任务
+        根据提供的学术研究类表格图片，完成以下任务：
+        1. 提取图片中的所有表格内容；
+        2. 特别注意识别因换行或竖排造成的术语断裂；
+        3. 使用语义化的 HTML 标签构建结构清晰的网页表格；
+        4. 输出完整 HTML 代码。
+
+        ## 输出注意点
+        - 图像中有些中文术语存在视觉换行或垂直排版（如“纤维\n素”、“图\n像\识\n别”），请将这些词语合并为一个完整术语；
+        - 表格结构应使用标准 HTML 表格语义标签，包括：
+        - <table> 表格容器；
+        - <thead> 表头区域；
+        - <tbody> 表格主体；
+        - <tr> 表格行；
+        - <th> 表头单元格（加粗、居中）；
+        - <td> 数据单元格（居中）；
+        - 所有内容应忠实还原图片中的行列顺序与数据；
+        - 不得添加任何解释性文字，仅输出 HTML 源代码。
+
+        ## 输出示例
+
+        ### 正确的输出示例
+        <table>
+        <thead>
+            <tr>
+            <th>Material</th>
+            <th>Property</th>
+            <th>Performance</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+            <td>Cellulose</td>
+            <td>Thermal Stability</td>
+            <td>High</td>
+            </tr>
+            <tr>
+            <td>Graphene</td>
+            <td>Conductivity</td>
+            <td>Excellent</td>
+            </tr>
+        </tbody>
+        </table>
+        ### 错误的输出示例
+        <h1>表格内容</h1>
+        <p>纤维</p >
+        <p>素</p >
+        <!-- 错误1：未合并换行词语，未翻译 -->
+        <!-- 错误2：使用了不语义化的标签结构 -->
+        """
         
         try:
             # 1. 发送请求，要求服务器以"流"的方式返回
             stream = self.client.chat.completions.create(
-                model="qvq-max",
+                model="qwen-vl-max",
                 messages=[{
                     "role": "user",
                     "content": [
