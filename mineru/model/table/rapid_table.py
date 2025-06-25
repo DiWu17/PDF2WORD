@@ -1,0 +1,173 @@
+import os
+import html
+import cv2
+import numpy as np
+from loguru import logger
+# from rapid_table import RapidTable, RapidTableInput #不再需要
+from openai import OpenAI
+import base64
+import io
+
+# 导入配置
+import sys
+
+# 将项目根目录添加到sys.path，以便能够找到Config.py
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+from Config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL
+
+
+# from mineru.utils.enum_class import ModelPath #不再需要
+# from mineru.utils.models_download_utils import auto_download_and_get_model_root_path #不再需要
+
+def encode_image(image):
+    buffered = io.BytesIO()
+    image.save(buffered, format="JPEG")
+    return base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+def escape_html(input_string):
+    """Escape HTML Entities."""
+    return html.escape(input_string)
+
+
+class RapidTableModel(object):
+    def __init__(self):
+        """
+        初始化RapidTableModel，使用Qwen作为表格识别引擎。
+        """
+        self.client = OpenAI(
+            api_key=DASHSCOPE_API_KEY,
+            base_url=DASHSCOPE_BASE_URL,
+        )
+        logger.info("RapidTableModel (VLM-based) initialized.")
+        # slanet_plus_model_path = os.path.join(auto_download_and_get_model_root_path(ModelPath.slanet_plus), ModelPath.slanet_plus)
+        # input_args = RapidTableInput(model_type='slanet_plus', model_path=slanet_plus_model_path)
+        # self.table_model = RapidTable(input_args)
+        # self.ocr_engine = ocr_engine
+
+
+    # def predict(self, image):
+    #     bgr_image = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
+    #
+    #     # First check the overall image aspect ratio (height/width)
+    #     img_height, img_width = bgr_image.shape[:2]
+    #     img_aspect_ratio = img_height / img_width if img_width > 0 else 1.0
+    #     img_is_portrait = img_aspect_ratio > 1.2
+    #
+    #     if img_is_portrait:
+    #
+    #         det_res = self.ocr_engine.ocr(bgr_image, rec=False)[0]
+    #         # Check if table is rotated by analyzing text box aspect ratios
+    #         is_rotated = False
+    #         if det_res:
+    #             vertical_count = 0
+    #
+    #             for box_ocr_res in det_res:
+    #                 p1, p2, p3, p4 = box_ocr_res
+    #
+    #                 # Calculate width and height
+    #                 width = p3[0] - p1[0]
+    #                 height = p3[1] - p1[1]
+    #
+    #                 aspect_ratio = width / height if height > 0 else 1.0
+    #
+    #                 # Count vertical vs horizontal text boxes
+    #                 if aspect_ratio < 0.8:  # Taller than wide - vertical text
+    #                     vertical_count += 1
+    #                 # elif aspect_ratio > 1.2:  # Wider than tall - horizontal text
+    #                 #     horizontal_count += 1
+    #
+    #             # If we have more vertical text boxes than horizontal ones,
+    #             # and vertical ones are significant, table might be rotated
+    #             if vertical_count >= len(det_res) * 0.3:
+    #                 is_rotated = True
+    #
+    #             # logger.debug(f"Text orientation analysis: vertical={vertical_count}, det_res={len(det_res)}, rotated={is_rotated}")
+    #
+    #         # Rotate image if necessary
+    #         if is_rotated:
+    #             # logger.debug("Table appears to be in portrait orientation, rotating 90 degrees clockwise")
+    #             image = cv2.rotate(np.asarray(image), cv2.ROTATE_90_CLOCKWISE)
+    #             bgr_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    #
+    #     # Continue with OCR on potentially rotated image
+    #     ocr_result = self.ocr_engine.ocr(bgr_image)[0]
+    #     if ocr_result:
+    #         ocr_result = [[item[0], escape_html(item[1][0]), item[1][1]] for item in ocr_result if
+    #                   len(item) == 2 and isinstance(item[1], tuple)]
+    #     else:
+    #         ocr_result = None
+    #
+    #
+    #     if ocr_result:
+    #         table_results = self.table_model(np.asarray(image), ocr_result)
+    #         html_code = table_results.pred_html
+    #         table_cell_bboxes = table_results.cell_bboxes
+    #         logic_points = table_results.logic_points
+    #         elapse = table_results.elapse
+    #         return html_code, table_cell_bboxes, logic_points, elapse
+    #     else:
+    #         return None, None, None, None
+
+    def predict(self, image):
+        """
+        使用大语言模型（VLM）从图片中识别表格并返回HTML（流式）。
+
+        Args:
+            image: PIL.Image.Image, 输入的表格图片。
+
+        Returns:
+            A tuple containing:
+            - html_code (str): The recognized table as an HTML string.
+            - table_cell_bboxes: None (not provided by this model).
+            - logic_points: None (not provided by this model).
+            - elapse: A float representing the processing time.
+        """
+        logger.info("使用大模型解析表格 (流式)...")
+        start_time = cv2.getTickCount()
+
+        base64_image = encode_image(image)
+
+        prompt = "请将这张图片中的表格转换为HTML格式。请只返回纯HTML代码，不要包含任何markdown标记（例如```html...```）或者其他多余的解释。"
+        
+        try:
+            # 1. 发送请求，要求服务器以"流"的方式返回
+            stream = self.client.chat.completions.create(
+                model="qvq-max",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        },
+                        {"type": "text", "text": prompt}
+                    ]
+                }],
+                stream=True, # 关键参数：开启流式输出
+                max_tokens=4000,  # 根据表格复杂程度可以调整
+            )
+
+            # 2. 循环接收数据块并拼接
+            html_code_pieces = []
+            for chunk in stream:
+                content = chunk.choices[0].delta.content
+                if content is not None:
+                    html_code_pieces.append(content)
+            
+            html_code = "".join(html_code_pieces)
+
+            # 3. 清理返回结果，去除可能的markdown标记
+            if html_code.strip().startswith("```html"):
+                html_code = html_code.strip()[7:].strip()
+                if html_code.endswith("```"):
+                    html_code = html_code[:-3].strip()
+            
+            elapse = (cv2.getTickCount() - start_time) / cv2.getTickFrequency()
+            logger.info(f"大模型解析表格成功，耗时: {elapse:.2f}s")
+            return html_code, None, None, elapse
+
+        except Exception as e:
+            logger.error(f"调用大模型解析表格失败: {e}")
+            return None, None, None, None
