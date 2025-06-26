@@ -459,7 +459,7 @@ class TextBoxWordReconstructor:
         if block_type == 'title':
             return 12
         else:
-            return 10
+            return 8
         
         if not bbox or len(bbox) < 4 or not text.strip():
             # 如果没有有效数据，返回默认字号

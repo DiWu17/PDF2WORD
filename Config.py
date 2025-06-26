@@ -15,6 +15,10 @@ import os
 # 推荐使用环境变量来管理密钥，以增强安全性。
 # 例如: os.getenv("DASHSCOPE_API_KEY", "your_default_key_if_not_set")
 
-DASHSCOPE_API_KEY = ""
+DASHSCOPE_API_KEY = "sk-320c97da273e4165a24d4ece5c9a53d9"
 # DashScope API的基础URL，通常保持默认即可。
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+# 是否使用流式请求，默认为True，以优化性能和用户体验。
+# 如果设置为False，则会等待模型完全生成所有内容后一次性返回，可能会增加等待时间。
+DASHSCOPE_STREAM_REQUEST = False

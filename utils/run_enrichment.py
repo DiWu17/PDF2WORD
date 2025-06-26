@@ -3,6 +3,7 @@ import json
 import re
 from thefuzz import fuzz
 from tqdm import tqdm
+from loguru import logger
 
 def enrich_layout_with_font_size(layout_path, analysis_path, output_path):
     """
@@ -14,15 +15,15 @@ def enrich_layout_with_font_size(layout_path, analysis_path, output_path):
     from thefuzz import fuzz
     from tqdm import tqdm
 
-    print("Loading layout file...")
+    logger.info("Loading layout file...")
     with open(layout_path, 'r', encoding='utf-8') as f:
         layout_data = json.load(f)
 
-    print("Loading analysis file...")
+    logger.info("Loading analysis file...")
     with open(analysis_path, 'r', encoding='utf-8') as f:
         analysis_data = json.load(f)
 
-    print("Extracting spans from analysis data...")
+    logger.info("Extracting spans from analysis data...")
     analysis_spans = []
     for page in analysis_data.get('pages', []):
         for block in page.get('blocks', []):
@@ -35,7 +36,7 @@ def enrich_layout_with_font_size(layout_path, analysis_path, output_path):
                         })
 
     # 1. Build a quick-lookup index to find starting positions of text sequences.
-    print("\nBuilding a quick-lookup index for analysis spans...")
+    logger.info("\nBuilding a quick-lookup index for analysis spans...")
     INDEX_NGRAM_SIZE = 7  # Use a 7-character key for the index.
     span_index = {}
     
@@ -51,7 +52,7 @@ def enrich_layout_with_font_size(layout_path, analysis_path, output_path):
             if key not in span_index:  # Store only the first occurrence to keep the index small
                 span_index[key] = i
 
-    print("\nIndex built. Starting block matching process...")
+    logger.info("\nIndex built. Starting block matching process...")
 
     # 2. Process all blocks.
     for page_info in tqdm(layout_data.get('pdf_info', []), desc="Processing Pages"):
@@ -117,11 +118,11 @@ def enrich_layout_with_font_size(layout_path, analysis_path, output_path):
                 if best_match_info['score'] > 90:
                     block['avg_size'] = best_match_info['avg_size']
 
-    print(f"\nSaving enriched layout to {output_path}")
+    logger.info(f"\nSaving enriched layout to {output_path}")
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(layout_data, f, ensure_ascii=False, indent=4)
     
-    print("Enrichment complete.")
+    logger.info("Enrichment complete.")
 
 if __name__ == "__main__":
     layout_file = os.path.join('output', 'layout.json')
@@ -129,9 +130,9 @@ if __name__ == "__main__":
     output_file = os.path.join('output', 'layout_enriched.json')
 
     if not os.path.exists(layout_file):
-        print(f"Error: Layout file not found at {layout_file}")
+        logger.error(f"Error: Layout file not found at {layout_file}")
     elif not os.path.exists(analysis_file):
-        print(f"Error: Analysis file not found at {analysis_file}")
+        logger.error(f"Error: Analysis file not found at {analysis_file}")
     else:
         enrich_layout_with_font_size(layout_file, analysis_file, output_file)
-        print(f"Enriched layout saved to {output_file}") 
+        logger.info(f"Enriched layout saved to {output_file}") 

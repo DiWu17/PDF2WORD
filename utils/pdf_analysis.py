@@ -5,8 +5,9 @@ import os
 import base64
 import re
 import math
+from loguru import logger
 
-def parse_pdf(pdf_path, json_path):
+def analysis_pdf(pdf_path, json_path):
     """
     Parses a PDF file and extracts text blocks, saving the output to a JSON file.
 
@@ -14,13 +15,13 @@ def parse_pdf(pdf_path, json_path):
     :param json_path: Path to the output JSON file.
     """
     if not os.path.exists(pdf_path):
-        print(f"Error: PDF file not found at {pdf_path}")
+        logger.error(f"Error: PDF file not found at {pdf_path}")
         return
 
     try:
         doc = fitz.open(pdf_path)
     except Exception as e:
-        print(f"Error opening PDF file: {e}")
+        logger.error(f"Error opening PDF file: {e}")
         return
 
     pdf_data = {
@@ -49,7 +50,7 @@ def parse_pdf(pdf_path, json_path):
 
     with open(json_path, 'w', encoding='utf-8') as jf:
         json.dump(pdf_data, jf, ensure_ascii=False, indent=4)
-    print(f"Successfully converted {pdf_path} to {json_path}")
+    logger.info(f"Successfully converted {pdf_path} to {json_path}")
 
 
 def estimate_line_count(text: str, bbox: list) -> int:

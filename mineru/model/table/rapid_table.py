@@ -13,7 +13,7 @@ import sys
 
 # 将项目根目录添加到sys.path，以便能够找到Config.py
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
-from Config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL
+from Config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, DASHSCOPE_STREAM_REQUEST
 
 
 # from mineru.utils.enum_class import ModelPath #不再需要
@@ -110,7 +110,8 @@ class RapidTableModel(object):
 
     def predict(self, image):
         """
-        使用大语言模型（VLM）从图片中识别表格并返回HTML（流式）。
+        使用大语言模型（VLM）从图片中识别表格并返回HTML。
+        根据配置，此方法可以以流式或非流式方式工作。
 
         Args:
             image: PIL.Image.Image, 输入的表格图片。
@@ -122,7 +123,7 @@ class RapidTableModel(object):
             - logic_points: None (not provided by this model).
             - elapse: A float representing the processing time.
         """
-        logger.info("使用大模型解析表格 (流式)...")
+        logger.info(f"使用大模型解析表格 (流式: {DASHSCOPE_STREAM_REQUEST})...")
         start_time = cv2.getTickCount()
 
         base64_image = encode_image(image)
@@ -137,9 +138,9 @@ class RapidTableModel(object):
         2. 特别注意识别因换行或竖排造成的术语断裂；
         3. 使用语义化的 HTML 标签构建结构清晰的网页表格；
         4. 输出完整 HTML 代码。
+        5. 特别注意不要把两个靠的比较近的列合并，比如发表年份材料制备方法，不要合并，分成"年份、材料、制备方法"三列
 
         ## 输出注意点
-        - 图像中有些中文术语存在视觉换行或垂直排版（如“纤维\n素”、“图\n像\识\n别”），请将这些词语合并为一个完整术语；
         - 表格结构应使用标准 HTML 表格语义标签，包括：
         - <table> 表格容器；
         - <thead> 表头区域；
@@ -183,35 +184,56 @@ class RapidTableModel(object):
         """
         
         try:
-            # 1. 发送请求，要求服务器以"流"的方式返回
-            stream = self.client.chat.completions.create(
-                model="qwen-vl-max",
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        },
-                        {"type": "text", "text": prompt}
-                    ]
-                }],
-                stream=True, # 关键参数：开启流式输出
-                max_tokens=4000,  # 根据表格复杂程度可以调整
-            )
+            if DASHSCOPE_STREAM_REQUEST:
+                # --- 流式请求 ---
+                stream = self.client.chat.completions.create(
+                    model="qwen-vl-max-latest",
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
+                                }
+                            },
+                            {"type": "text", "text": prompt}
+                        ]
+                    }],
+                    stream=True,
+                    max_tokens=4000,
+                )
 
-            # 2. 循环接收数据块并拼接
-            html_code_pieces = []
-            for chunk in stream:
-                content = chunk.choices[0].delta.content
-                if content is not None:
-                    html_code_pieces.append(content)
+                html_code_pieces = []
+                for chunk in stream:
+                    content = chunk.choices[0].delta.content
+                    if content is not None:
+                        html_code_pieces.append(content)
+                
+                html_code = "".join(html_code_pieces)
             
-            html_code = "".join(html_code_pieces)
+            else:
+                # --- 非流式请求 ---
+                response = self.client.chat.completions.create(
+                    model="qwen-vl-max-latest",
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
+                                }
+                            },
+                            {"type": "text", "text": prompt}
+                        ]
+                    }],
+                    stream=False,
+                    max_tokens=4000,
+                )
+                html_code = response.choices[0].message.content
 
-            # 3. 清理返回结果，去除可能的markdown标记
+            # 清理返回结果，去除可能的markdown标记
             if html_code.strip().startswith("```html"):
                 html_code = html_code.strip()[7:].strip()
                 if html_code.endswith("```"):
@@ -223,4 +245,12 @@ class RapidTableModel(object):
 
         except Exception as e:
             logger.error(f"调用大模型解析表格失败: {e}")
+            # 在非流式模式下，我们可能已经有完整的 html_code
+            error_context = ""
+            try:
+                if 'html_code' in locals() and html_code:
+                    error_context = f"模型返回结果: {html_code}"
+            except NameError:
+                pass
+            logger.error(f"调用大模型解析表格失败: {e}. {error_context}")
             return None, None, None, None
