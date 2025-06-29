@@ -8,14 +8,6 @@ from openai import OpenAI
 import base64
 import io
 
-# 导入配置
-import sys
-
-# 将项目根目录添加到sys.path，以便能够找到Config.py
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
-from Config import DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, DASHSCOPE_STREAM_REQUEST
-
-
 # from mineru.utils.enum_class import ModelPath #不再需要
 # from mineru.utils.models_download_utils import auto_download_and_get_model_root_path #不再需要
 
@@ -35,9 +27,10 @@ class RapidTableModel(object):
         初始化RapidTableModel，使用Qwen作为表格识别引擎。
         """
         self.client = OpenAI(
-            api_key=DASHSCOPE_API_KEY,
-            base_url=DASHSCOPE_BASE_URL,
+            api_key=os.getenv("DASHSCOPE_API_KEY"),
+            base_url=os.getenv("DASHSCOPE_BASE_URL"),
         )
+        self.stream_request = os.getenv('DASHSCOPE_STREAM_REQUEST', 'False').lower() in ('true', '1', 't')
         logger.info("RapidTableModel (VLM-based) initialized.")
         # slanet_plus_model_path = os.path.join(auto_download_and_get_model_root_path(ModelPath.slanet_plus), ModelPath.slanet_plus)
         # input_args = RapidTableInput(model_type='slanet_plus', model_path=slanet_plus_model_path)
@@ -123,7 +116,7 @@ class RapidTableModel(object):
             - logic_points: None (not provided by this model).
             - elapse: A float representing the processing time.
         """
-        logger.info(f"使用大模型解析表格 (流式: {DASHSCOPE_STREAM_REQUEST})...")
+        logger.info(f"使用大模型解析表格 (流式: {self.stream_request})...")
         start_time = cv2.getTickCount()
 
         base64_image = encode_image(image)
@@ -184,7 +177,7 @@ class RapidTableModel(object):
         """
         
         try:
-            if DASHSCOPE_STREAM_REQUEST:
+            if self.stream_request:
                 # --- 流式请求 ---
                 stream = self.client.chat.completions.create(
                     model="qwen-vl-max-latest",

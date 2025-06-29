@@ -2,16 +2,17 @@ import os
 import argparse
 from pathlib import Path
 from loguru import logger
+from dotenv import load_dotenv
 
 from utils.pdf_utils import parse_pdf_to_files
 from utils.docx_utils import convert_markdown_to_word_with_pandoc
 from utils.pdf_converter import process_and_convert_pdf
-import Config
 
 
 os.environ["MINERU_MODEL_SOURCE"] = "modelscope"
 
 def main():
+    load_dotenv() # Load environment variables from .env file
     """
     主函数，根据用户选择的模式将PDF转换为Word文档。
     """
